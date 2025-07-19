@@ -1,4 +1,4 @@
-# Portfolio: PAQJP_4 Compression System
+# Portfolio: Quantum PAQJP_4 Compression System
 
 **Project Name**: Quantum PAQJP_4 Compression System  
 **Author**: Jurijus Pacalovas  
