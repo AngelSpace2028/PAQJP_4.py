@@ -133,18 +133,18 @@ class String:
         return self.data[index]
     
     def __setitem__(self, index: int, value: int):
-        self.data[index] = value & 0xFF  # Ensure byte range
+        self.data[index] = value
     
     def __str__(self) -> str:
         return self.data.decode('utf-8')
 
 class Array:
     def __init__(self, size: int = 0, initial_value: int = 0):
-        self.data = array.array('B', [initial_value & 0xFF] * size)  # Ensure byte range
+        self.data = array.array('B', [initial_value] * size)
     
     def resize(self, new_size: int):
         if new_size > len(self.data):
-            self.data.extend([0 & 0xFF] * (new_size - len(self.data)))
+            self.data.extend([0] * (new_size - len(self.data)))
         else:
             self.data = self.data[:new_size]
     
@@ -155,7 +155,7 @@ class Array:
         return self.data[index]
     
     def __setitem__(self, index: int, value: int):
-        self.data[index] = value & 0xFF  # Ensure byte range
+        self.data[index] = value
     
     def __len__(self) -> int:
         return len(self.data)
@@ -274,15 +274,15 @@ def encode_datetime(dt: datetime = None) -> bytes:
     day_of_week = dt.weekday()
     month = dt.month
     day_of_month = dt.day
-    year = dt.year - 2000  # Offset to fit within 0-4095 range from 2000 onwards
+    year = dt.year
+    version = 0
 
     if not (0 <= seconds <= 59 and 0 <= minutes <= 59 and 0 <= hours <= 23 and
             0 <= day_of_week <= 6 and 1 <= month <= 12 and 
-            1 <= day_of_month <= 31 and 0 <= year <= 2095 and 0 <= version <= 127):  # Updated year range comment
+            1 <= day_of_month <= 31 and 0 <= year <= 4095 and 0 <= version <= 127):
         logging.error("Invalid date/time values for encoding")
         raise ValueError("Date/time values out of range")
 
-    version = 0
     encoded = bytearray(6)
     encoded[0] = (seconds & 0x3F) | ((version & 0x03) << 6)
     encoded[1] = (minutes & 0x3F) | (((version >> 2) & 0x03) << 6)
@@ -303,12 +303,12 @@ def decode_datetime(data: bytes) -> Tuple[int, int, int, int, int, int, int, int
     month = ((data[2] >> 5) & 0x07) | ((data[3] & 0x01) << 3)
     day_of_month = (data[3] >> 1) & 0x1F
     day_of_week = data[4] & 0x07
-    year = ((data[4] >> 3) & 0x1F) | ((data[5] & 0x7F) << 5) + 2000  # Offset back to full year
+    year = ((data[4] >> 3) & 0x1F) | ((data[5] & 0x7F) << 5)
     version = ((data[0] >> 6) & 0x03) | (((data[1] >> 6) & 0x03) << 2) | (((data[3] >> 6) & 0x03) << 4) | (((data[5] >> 7) & 0x01) << 6)
 
     if not (0 <= seconds <= 59 and 0 <= minutes <= 59 and 0 <= hours <= 23 and
             0 <= day_of_week <= 6 and 1 <= month <= 12 and 
-            1 <= day_of_month <= 31 and 2000 <= year <= 4095 and 0 <= version <= 127):
+            1 <= day_of_month <= 31 and 0 <= year <= 4095 and 0 <= version <= 127):
         logging.error("Decoded date/time values out of range")
         raise ValueError("Decoded date/time values out of range")
 
@@ -317,10 +317,10 @@ def decode_datetime(data: bytes) -> Tuple[int, int, int, int, int, int, int, int
 def transform_with_prime_xor_every_3_bytes(data, repeat=7):
     transformed = bytearray(data)
     for prime in PRIMES:
-        xor_val = prime if prime == 2 else max(1, math.ceil(prime * 4096 // 28672))
+        xor_val = prime if prime == 2 else max(1, math.ceil(prime * 4096 / 28672))
         for _ in range(repeat):
             for i in range(0, len(transformed), 3):
-                transformed[i] ^= xor_val & 0xFF  # Ensure byte range
+                transformed[i] ^= xor_val
     return bytes(transformed)
 
 def transform_with_pattern_chunk(data, chunk_size=4):
@@ -533,14 +533,14 @@ class SmartCompressor:
         transformed = bytearray(data)
         for _ in range(repeat):
             for i in range(len(transformed)):
-                transformed[i] = (transformed[i] - (i % 256)) & 0xFF  # Ensure byte range
+                transformed[i] = (transformed[i] - (i % 256)) % 256
         return bytes(transformed)
     
     def reverse_transform_04(self, data, repeat=50):
         transformed = bytearray(data)
         for _ in range(repeat):
             for i in range(len(transformed)):
-                transformed[i] = (transformed[i] + (i % 256)) & 0xFF  # Ensure byte range
+                transformed[i] = (transformed[i] + (i % 256)) % 256
         return bytes(transformed)
     
     def transform_05(self, data, shift=3):
@@ -583,8 +583,8 @@ class SmartCompressor:
         """
         transformed = bytearray(data)
         pi_length = len(self.PI_DIGITS)
-        data_size_kb = len(data) // 1024  # Integer division
-        cycles = min(10, max(1, data_size_kb))  # Cap cycles at 10
+        data_size_kb = len(data) / 1024
+        cycles = min(10, max(1, int(data_size_kb)))  # 1 cycle for <1KB, up to 10 for larger
         logging.info(f"transform_07: Using {cycles} cycles for {len(data)} bytes (base-256)")
 
         # Circular shift amount based on file size modulo pi length
@@ -594,13 +594,13 @@ class SmartCompressor:
         # Pre-transformation: XOR with a byte derived from file size
         size_byte = len(data) % 256
         for i in range(len(transformed)):
-            transformed[i] ^= size_byte & 0xFF  # Ensure byte range
+            transformed[i] ^= size_byte
 
         # Apply pi-based XOR with dynamic cycles
         for _ in range(cycles):
             for i in range(len(transformed)):
                 pi_digit = self.PI_DIGITS[i % pi_length]
-                transformed[i] ^= pi_digit & 0xFF  # Ensure byte range
+                transformed[i] ^= pi_digit
 
         return bytes(transformed)
     
@@ -610,20 +610,20 @@ class SmartCompressor:
         """
         transformed = bytearray(data)
         pi_length = len(self.PI_DIGITS)
-        data_size_kb = len(data) // 1024  # Integer division
-        cycles = min(10, max(1, data_size_kb))  # Cap cycles at 10
+        data_size_kb = len(data) / 1024
+        cycles = min(10, max(1, int(data_size_kb)))
         logging.info(f"reverse_transform_07: Using {cycles} cycles for {len(data)} bytes (base-256)")
 
         # Reverse pi-based XOR with dynamic cycles
         for _ in range(cycles):
             for i in range(len(transformed)):
                 pi_digit = self.PI_DIGITS[i % pi_length]
-                transformed[i] ^= pi_digit & 0xFF  # Ensure byte range
+                transformed[i] ^= pi_digit
 
         # Reverse pre-transformation
         size_byte = len(data) % 256
         for i in range(len(transformed)):
-            transformed[i] ^= size_byte & 0xFF  # Ensure byte range
+            transformed[i] ^= size_byte
 
         # Reverse circular shift
         shift = len(data) % pi_length
@@ -637,8 +637,8 @@ class SmartCompressor:
         """
         transformed = bytearray(data)
         pi_length = len(self.PI_DIGITS)
-        data_size_kb = len(data) // 1024  # Integer division
-        cycles = min(10, max(1, data_size_kb))  # Cap cycles at 10
+        data_size_kb = len(data) / 1024
+        cycles = min(10, max(1, int(data_size_kb)))  # 1 cycle for <1KB, up to 10 for larger
         logging.info(f"transform_08: Using {cycles} cycles for {len(data)} bytes (base-256)")
 
         # Circular shift amount based on file size modulo pi length
@@ -646,7 +646,7 @@ class SmartCompressor:
         self.PI_DIGITS = self.PI_DIGITS[shift:] + self.PI_DIGITS[:shift]
 
         # Pre-transformation: XOR with nearest prime to file size
-        size_prime = find_nearest_prime_around(len(data) % 256) & 0xFF  # Ensure byte range
+        size_prime = find_nearest_prime_around(len(data) % 256)
         for i in range(len(transformed)):
             transformed[i] ^= size_prime
 
@@ -654,7 +654,7 @@ class SmartCompressor:
         for _ in range(cycles):
             for i in range(len(transformed)):
                 pi_digit = self.PI_DIGITS[i % pi_length]
-                transformed[i] ^= pi_digit & 0xFF  # Ensure byte range
+                transformed[i] ^= pi_digit
 
         return bytes(transformed)
     
@@ -664,18 +664,18 @@ class SmartCompressor:
         """
         transformed = bytearray(data)
         pi_length = len(self.PI_DIGITS)
-        data_size_kb = len(data) // 1024  # Integer division
-        cycles = min(10, max(1, data_size_kb))  # Cap cycles at 10
+        data_size_kb = len(data) / 1024
+        cycles = min(10, max(1, int(data_size_kb)))
         logging.info(f"reverse_transform_08: Using {cycles} cycles for {len(data)} bytes (base-256)")
 
         # Reverse pi-based XOR with dynamic cycles
         for _ in range(cycles):
             for i in range(len(transformed)):
                 pi_digit = self.PI_DIGITS[i % pi_length]
-                transformed[i] ^= pi_digit & 0xFF  # Ensure byte range
+                transformed[i] ^= pi_digit
 
         # Reverse pre-transformation
-        size_prime = find_nearest_prime_around(len(data) % 256) & 0xFF  # Ensure byte range
+        size_prime = find_nearest_prime_around(len(data) % 256)
         for i in range(len(transformed)):
             transformed[i] ^= size_prime
 
@@ -702,7 +702,7 @@ class SmartCompressor:
             (5, self.transform_05),
             (6, self.transform_06),
             (7, self.transform_07),
-            (8, self.transform_08),
+            (8, self.transform_08),  # New transform_08 added
         ]
         # Prioritize transform_07 and transform_08 for JPEG and TEXT
         if filetype in [Filetype.JPEG, Filetype.TEXT]:
