@@ -1,6 +1,6 @@
 # Portfolio: PAQJP_4 Compression System
 
-**Project Name**: PAQJP_4 Compression System  
+**Project Name**: Quantum PAQJP_4 Compression System  
 **Author**: Jurijus Pacalovas  
 **Technologies**: Python, Compression Algorithms (PAQ, zlib, Huffman), File I/O, Datetime Encoding, Logging, Object-Oriented Programming  
 
