@@ -1,0 +1,4 @@
+dictionary.txt
+PAQJP_5.py
+PAQJP_5_Quantum_Entire_Software.py
+file: e.g.: Sentences.txt
